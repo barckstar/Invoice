@@ -2,15 +2,15 @@
 
 namespace invoice.Application.Interfaces;
 
-public interface IInvoiceRepository
+public interface IReviewService
 {
-    Task InsertAsync(InvoiceDto invoice);
-
     Task<InvoiceDto?> GetByReviewIdAsync(string reviewId);
 
     Task<IReadOnlyList<InvoiceDto>> GetPendingAsync(int page, int pageSize);
 
-    Task UpdateReviewAsync(string reviewId, UpdateInvoiceReviewRequest request);
+    Task<bool> UpdateAsync(string reviewId, UpdateInvoiceReviewRequest request);
 
-    Task UpdateStatusAsync(string reviewId, string status);
+    Task<bool> ApproveAsync(string reviewId);
+
+    Task<bool> RejectAsync(string reviewId);
 }

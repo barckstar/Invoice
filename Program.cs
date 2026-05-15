@@ -5,80 +5,74 @@ using invoice.Application.Services;
 using invoice.Infrastructure.Repositories;
 using invoice.Infrastructure.External;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//
-// 🔹 SERVICES
-//
-
-// DB
+// ─── DB ───────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddSingleton<SqliteInitializer>();
 
-// Core
+// ─── SERVICES ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<IStorageService, FileStorageService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IOcrService, AzureOcrService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IInvoiceValidationService, InvoiceValidationService>();
 
-// Controllers
+// ─── JWT ──────────────────────────────────────────────────────────────────────
+var jwtSecret = builder.Configuration["Jwt:Secret"]
+    ?? throw new InvalidOperationException("Jwt:Secret missing in config");
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ValidateIssuer = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "invoice-api",
+            ValidateAudience = true,
+            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "invoice-client",
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// ─── CONTROLLERS ──────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 
-// Multipart limits
-builder.Services.Configure<FormOptions>(options =>
-{
-    options.MultipartBodyLengthLimit = 50 * 1024 * 1024; // 50MB
-});
+// ─── MULTIPART LIMITS ─────────────────────────────────────────────────────────
+builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 50 * 1024 * 1024);
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 50 * 1024 * 1024);
 
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.Limits.MaxRequestBodySize = 50 * 1024 * 1024;
-});
-
-// CORS (para futuro: frontend / n8n)
+// ─── CORS ─────────────────────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
-{
     options.AddPolicy("AllowAll", policy =>
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-    );
-});
+        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
+// ─── BUILD ────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-//
-// 🔹 INIT DB
-//
 using (var scope = app.Services.CreateScope())
 {
-    var initializer = scope.ServiceProvider.GetRequiredService<SqliteInitializer>();
-    await initializer.InitializeAsync();
+    await scope.ServiceProvider
+        .GetRequiredService<SqliteInitializer>()
+        .InitializeAsync();
 }
 
-//
-// 🔹 MIDDLEWARE
-//
-
-// Debug simple (puedes quitar luego)
-app.Use(async (context, next) =>
-{
-    Console.WriteLine($"REQUEST: {context.Request.Method} {context.Request.Path}");
-    await next();
-});
-
+// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
 app.UseCors("AllowAll");
-
-// ⚠️ Desactivado por ahora para evitar conflictos
-// app.UseHttpsRedirection();
-
+app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
