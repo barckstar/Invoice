@@ -15,13 +15,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<DbConnectionFactory>();
 builder.Services.AddSingleton<SqliteInitializer>();
 
+// ─── REPOSITORIES ─────────────────────────────────────────────────────────────
+builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAdminRepository, AdminRepository>();
+
 // ─── SERVICES ─────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<IStorageService, FileStorageService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
-builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IOcrService, AzureOcrService>();
-builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IAdminAuthService, AdminAuthService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IInvoiceValidationService, InvoiceValidationService>();
 
@@ -42,7 +46,8 @@ builder.Services
             ValidateAudience = true,
             ValidAudience = builder.Configuration["Jwt:Audience"] ?? "invoice-client",
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
+            ClockSkew = TimeSpan.Zero,
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role
         };
     });
 

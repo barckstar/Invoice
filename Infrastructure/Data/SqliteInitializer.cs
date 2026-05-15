@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using System.Data.Common;
 
 namespace invoice.Infrastructure.Data;
 
@@ -31,6 +30,14 @@ public class SqliteInitializer
     }
 
     private static string GetSchema() => @"
+CREATE TABLE IF NOT EXISTS Admins (
+    Id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name         TEXT NOT NULL,
+    Email        TEXT UNIQUE NOT NULL,
+    PasswordHash TEXT NOT NULL,
+    CreatedAt    TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS Users (
     Phone        TEXT PRIMARY KEY,
     Name         TEXT,
@@ -44,26 +51,20 @@ CREATE TABLE IF NOT EXISTS Invoices (
     ImageHash     TEXT PRIMARY KEY,
     ReviewId      TEXT NOT NULL,
     OwnerPhone    TEXT,
-
     InvoiceNumber TEXT,
     VendorName    TEXT,
     InvoiceDate   TEXT,
     Currency      TEXT,
-
     Subtotal      REAL,
     TaxRate       REAL,
     Discount      REAL,
     TotalIva      REAL,
     TotalAmount   REAL,
-
     Confidence    REAL,
     Status        TEXT NOT NULL DEFAULT 'NeedsReview',
-
     ImagePath     TEXT,
     RawAzurePath  TEXT,
-
     CreatedAt     TEXT DEFAULT CURRENT_TIMESTAMP,
-
     FOREIGN KEY(OwnerPhone) REFERENCES Users(Phone)
 );
 
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS DownloadTokens (
     FOREIGN KEY(OwnerPhone) REFERENCES Users(Phone)
 );
 
+CREATE INDEX IF NOT EXISTS idx_admins_email    ON Admins(Email);
 CREATE INDEX IF NOT EXISTS idx_invoices_owner  ON Invoices(OwnerPhone);
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON Invoices(Status);
 CREATE INDEX IF NOT EXISTS idx_invoices_date   ON Invoices(InvoiceDate);

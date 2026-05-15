@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using invoice.Application.DTOs;
 using invoice.Application.Interfaces;
 
@@ -6,6 +7,7 @@ namespace invoice.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "admin")]
 public class ReviewController : ControllerBase
 {
     private readonly IReviewService _review;
@@ -31,7 +33,7 @@ public class ReviewController : ControllerBase
     {
         var invoice = await _review.GetByReviewIdAsync(reviewId);
         return invoice is null
-            ? NotFound($"Invoice with ReviewId '{reviewId}' not found")
+            ? NotFound($"Invoice '{reviewId}' no encontrada")
             : Ok(invoice);
     }
 
@@ -43,8 +45,8 @@ public class ReviewController : ControllerBase
     {
         var updated = await _review.UpdateAsync(reviewId, request);
         return updated
-            ? Ok("Invoice updated and marked as Reviewed")
-            : NotFound($"Invoice with ReviewId '{reviewId}' not found");
+            ? Ok("Factura actualizada y marcada como Reviewed")
+            : NotFound($"Invoice '{reviewId}' no encontrada");
     }
 
     // POST /api/review/{reviewId}/approve
@@ -53,8 +55,8 @@ public class ReviewController : ControllerBase
     {
         var approved = await _review.ApproveAsync(reviewId);
         return approved
-            ? Ok("Invoice approved")
-            : NotFound($"Invoice with ReviewId '{reviewId}' not found");
+            ? Ok("Factura aprobada")
+            : NotFound($"Invoice '{reviewId}' no encontrada");
     }
 
     // POST /api/review/{reviewId}/reject
@@ -63,7 +65,7 @@ public class ReviewController : ControllerBase
     {
         var rejected = await _review.RejectAsync(reviewId);
         return rejected
-            ? Ok("Invoice rejected")
-            : NotFound($"Invoice with ReviewId '{reviewId}' not found");
+            ? Ok("Factura rechazada")
+            : NotFound($"Invoice '{reviewId}' no encontrada");
     }
 }
