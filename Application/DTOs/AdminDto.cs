@@ -17,3 +17,11 @@ public record CreateAdminRequest(
     string Email,
     string Password
 );
+
+public class AdminRow
+{
+    public long Id { get; init; } 
+    public string Name { get; init; } = "";
+    public string Email { get; init; } = "";
+    public string PasswordHash { get; init; } = "";
+}

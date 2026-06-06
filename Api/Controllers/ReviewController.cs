@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.StaticFiles;
 using invoice.Application.DTOs;
 using invoice.Application.Interfaces;
 
@@ -11,6 +12,8 @@ namespace invoice.Api.Controllers;
 public class ReviewController : ControllerBase
 {
     private readonly IReviewService _review;
+    private static readonly string StorageRoot =
+        Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "Storage"));
 
     public ReviewController(IReviewService review)
     {
@@ -24,6 +27,14 @@ public class ReviewController : ControllerBase
         [FromQuery] int pageSize = 20)
     {
         var results = await _review.GetPendingAsync(page, pageSize);
+        return Ok(results);
+    }
+
+    // GET /api/review?status=&from=&to=&phone=&q=&sortBy=&sortDir=&page=&pageSize=
+    [HttpGet]
+    public async Task<IActionResult> Search([FromQuery] InvoiceSearchQuery query)
+    {
+        var results = await _review.SearchAsync(query);
         return Ok(results);
     }
 
@@ -67,5 +78,50 @@ public class ReviewController : ControllerBase
         return rejected
             ? Ok("Factura rechazada")
             : NotFound($"Invoice '{reviewId}' no encontrada");
+    }
+
+    // GET /api/review/{reviewId}/image
+    [HttpGet("{reviewId}/image")]
+    public async Task<IActionResult> GetImage(string reviewId)
+    {
+        var invoice = await _review.GetByReviewIdAsync(reviewId);
+        if (invoice is null) return NotFound();
+
+        if (!TryResolveSafePath(invoice.ImagePath, out var fullPath))
+            return NotFound("Imagen no disponible");
+
+        var provider = new FileExtensionContentTypeProvider();
+        if (!provider.TryGetContentType(fullPath, out var contentType))
+            contentType = "application/octet-stream";
+
+        return PhysicalFile(fullPath, contentType);
+    }
+
+    // GET /api/review/{reviewId}/raw
+    [HttpGet("{reviewId}/raw")]
+    public async Task<IActionResult> GetRawJson(string reviewId)
+    {
+        var invoice = await _review.GetByReviewIdAsync(reviewId);
+        if (invoice is null) return NotFound();
+
+        if (!TryResolveSafePath(invoice.RawAzurePath, out var fullPath))
+            return NotFound("JSON crudo no disponible");
+
+        return PhysicalFile(fullPath, "application/json");
+    }
+
+    // Evita path traversal: el path final debe estar dentro de Storage/
+    private static bool TryResolveSafePath(string? path, out string fullPath)
+    {
+        fullPath = "";
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        try { fullPath = Path.GetFullPath(path); }
+        catch { return false; }
+
+        if (!fullPath.StartsWith(StorageRoot, System.StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return System.IO.File.Exists(fullPath);
     }
 }

@@ -135,6 +135,91 @@ public class InvoiceRepository : IInvoiceRepository
             .AsReadOnly();
     }
 
+    // ─── SEARCH ───────────────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> SortableColumns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CreatedAt", "InvoiceDate", "TotalAmount", "VendorName"
+    };
+
+    public async Task<PagedResult<InvoiceDto>> SearchAsync(InvoiceSearchQuery query)
+    {
+        using var connection = _factory.Create();
+        connection.Open();
+
+        var page     = query.Page     < 1 ? 1  : query.Page;
+        var pageSize = query.PageSize < 1 ? 20 : query.PageSize > 100 ? 100 : query.PageSize;
+
+        var sortBy  = SortableColumns.Contains(query.SortBy) ? query.SortBy : "CreatedAt";
+        var sortDir = string.Equals(query.SortDir, "asc", StringComparison.OrdinalIgnoreCase) ? "ASC" : "DESC";
+
+        var where = new List<string>();
+        var p = new DynamicParameters();
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            where.Add("Status = @Status");
+            p.Add("Status", query.Status);
+        }
+        if (query.From.HasValue)
+        {
+            where.Add("InvoiceDate >= @From");
+            p.Add("From", query.From.Value.ToString("yyyy-MM-dd"));
+        }
+        if (query.To.HasValue)
+        {
+            where.Add("InvoiceDate <= @To");
+            p.Add("To", query.To.Value.ToString("yyyy-MM-dd"));
+        }
+        if (!string.IsNullOrWhiteSpace(query.Phone))
+        {
+            where.Add("OwnerPhone LIKE @Phone");
+            p.Add("Phone", $"%{query.Phone.Trim()}%");
+        }
+        if (!string.IsNullOrWhiteSpace(query.Q))
+        {
+            where.Add("(ReviewId LIKE @Q OR InvoiceNumber LIKE @Q OR VendorName LIKE @Q)");
+            p.Add("Q", $"%{query.Q.Trim()}%");
+        }
+
+        var whereSql = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
+
+        var total = await connection.ExecuteScalarAsync<int>(
+            $"SELECT COUNT(*) FROM Invoices {whereSql}", p);
+
+        p.Add("PageSize", pageSize);
+        p.Add("Offset", (page - 1) * pageSize);
+
+        var rows = await connection.QueryAsync<InvoiceRow>(
+            $@"SELECT * FROM Invoices
+               {whereSql}
+               ORDER BY {sortBy} {sortDir}
+               LIMIT @PageSize OFFSET @Offset", p);
+
+        var invoiceRows = rows.ToList();
+
+        if (invoiceRows.Count == 0)
+            return new PagedResult<InvoiceDto>(total, page, pageSize, []);
+
+        var hashes = invoiceRows.Select(r => r.ImageHash).ToList();
+
+        var allItems = await connection.QueryAsync<InvoiceItemRow>(
+            "SELECT * FROM InvoiceItems WHERE ImageHash IN @Hashes",
+            new { Hashes = hashes });
+
+        var itemsByHash = allItems
+            .GroupBy(i => i.ImageHash)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var items = invoiceRows
+            .Select(r => MapToDto(r,
+                itemsByHash.TryGetValue(r.ImageHash, out var its) ? its : []))
+            .ToList()
+            .AsReadOnly();
+
+        return new PagedResult<InvoiceDto>(total, page, pageSize, items);
+    }
+
     // ─── UPDATE REVIEW ────────────────────────────────────────────────────────
 
     public async Task UpdateReviewAsync(string reviewId, UpdateInvoiceReviewRequest request)

@@ -21,6 +21,9 @@ public class ReviewService : IReviewService
             page: page < 1 ? 1 : page,
             pageSize: pageSize < 1 ? 20 : pageSize > 100 ? 100 : pageSize);
 
+    public Task<PagedResult<InvoiceDto>> SearchAsync(InvoiceSearchQuery query)
+        => _repo.SearchAsync(query);
+
     public async Task<bool> UpdateAsync(string reviewId, UpdateInvoiceReviewRequest request)
     {
         var exists = await _repo.GetByReviewIdAsync(reviewId);

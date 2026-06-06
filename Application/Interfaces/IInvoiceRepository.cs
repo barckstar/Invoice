@@ -10,6 +10,8 @@ public interface IInvoiceRepository
 
     Task<IReadOnlyList<InvoiceDto>> GetPendingAsync(int page, int pageSize);
 
+    Task<PagedResult<InvoiceDto>> SearchAsync(InvoiceSearchQuery query);
+
     Task UpdateReviewAsync(string reviewId, UpdateInvoiceReviewRequest request);
 
     Task UpdateStatusAsync(string reviewId, string status);

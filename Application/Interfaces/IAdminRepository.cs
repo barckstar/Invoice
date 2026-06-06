@@ -8,10 +8,3 @@ public interface IAdminRepository
     Task<bool> AnyAsync();
     Task CreateAsync(CreateAdminRequest request, string passwordHash);
 }
-
-public record AdminRow(
-    int Id,
-    string Name,
-    string Email,
-    string PasswordHash
-);
